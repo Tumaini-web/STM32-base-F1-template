@@ -1,43 +1,62 @@
 #include "stm32f1xx.h"
 
-// Quick and dirty delay
-static void delay (unsigned int time) {
-    for (unsigned int i = 0; i < time; i++)
-        for (volatile unsigned int j = 0; j < 2000; j++);
-}
 
-int main (void) {
-    // Turn on the GPIOC and B peripheral
-    RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
+int main(void)
+{
+	RCC->APB2ENR|=RCC_APB2ENR_IOPAEN;
 
-    RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;
+	/*Configure PA0 as Output Alternate Push/Pull */
+	GPIOA->CRL|=GPIO_CRL_MODE0;
+	GPIOA->CRL|=(GPIO_CRL_CNF0_1);
+	GPIOA->CRL&=~(GPIO_CRL_CNF0_0);
 
-    // Put pin 13 in general purpose push-pull mode
-    GPIOC->CRH &= ~(GPIO_CRH_CNF13);
-    // Set the output mode to max. 2MHz
-    GPIOC->CRH |= GPIO_CRH_MODE13_1;
 
-    // Put pin 12 in general purpose push-pull mode
-    GPIOB->CRH &= ~(GPIO_CRH_CNF12);
-    // Set the output mode to max. 2MHz
-    GPIOB->CRH |= GPIO_CRH_MODE12_1;
+    /*Configure PA1 as input with Push/Pull*/
+    GPIOA->CRL &= ~(GPIO_CRL_MODE4);
+    GPIOA->CRL |= GPIO_CRL_CNF4_1;
+    GPIOA->CRL &= ~(GPIO_CRL_CNF4_0);
 
-    while (1) {
-        // Reset the state of pin 13 to output low
-        GPIOC->BSRR = GPIO_BSRR_BR13;
+    /*Configure with puLL UP resistor*/
 
-        GPIOB->BSRR = GPIO_BSRR_BR12;
+    GPIOA->ODR &= ~(GPIO_ODR_ODR4);
 
-        delay(200);
+    
 
-        // Set the state of pin 13 to output high
-        GPIOC->BSRR = GPIO_BSRR_BS13;
+	/*Don't remap the pin*/
+	AFIO->MAPR&=~AFIO_MAPR_TIM2_REMAP;
 
-        GPIOB->BSRR = GPIO_BSRR_BS12;
 
-        delay(200);
-    }
+	/*Enable clock access to timer2*/
+	RCC->APB1ENR|=RCC_APB1ENR_TIM2EN;
 
-    // Return 0 to satisfy compiler
-    return 0;
+	/*Configure timer2*/
+	TIM2->PSC=18;                         // DIVIDE 8MHz by 57 == 140000
+	TIM2->ARR=6;                         // 14000 divided by 2 == 70KHz
+	TIM2->CCMR1|=TIM_CCMR1_OC1M_2|TIM_CCMR1_OC1M_1;
+	TIM2->CCER|=TIM_CCER_CC1E;
+	TIM2->CR1|=TIM_CR1_CEN;
+
+    
+    
+
+
+	while(1)
+	{
+		// for (volatile int i=0;i<100;i++)
+		// 	{
+		// 		TIM2->CCR1=i;
+		// 		for (int j=0;j<10000;j++);
+		// 	}
+
+		// for (volatile int i=100;i>0;i--)
+		// 	{
+		// 		TIM2->CCR1=i;
+		// 		for (int j=0;j<1000;j++);
+		// 	}
+        
+
+            TIM2->CCR1=3;
+
+
+	}
 }
