@@ -11,14 +11,20 @@ int main(void)
 	GPIOA->CRL&=~(GPIO_CRL_CNF0_0);
 
 
-    /*Configure PA1 as input with Push/Pull*/
-    GPIOA->CRL &= ~(GPIO_CRL_MODE4);
-    GPIOA->CRL |= GPIO_CRL_CNF4_1;
-    GPIOA->CRL &= ~(GPIO_CRL_CNF4_0);
+   /*Set PA1 to analog Mode*/
+	GPIOA->CRL&=~GPIO_CRL_CNF1;
+	GPIOA->CRL&=~GPIO_CRL_MODE1;
 
-    /*Configure with puLL UP resistor*/
 
-    GPIOA->ODR &= ~(GPIO_ODR_ODR4);
+    /*Enable clock access to ADC1*/
+	RCC->APB2ENR|=RCC_APB2ENR_ADC1EN;
+
+    /*Set trigger mode to be external*/
+	ADC1->CR2|=ADC_CR2_EXTTRIG;
+
+	/*Set external trigger to be TIM3_TRGO event*/
+
+	ADC1->CR2|=ADC_CR2_EXTSEL_2;
 
     
 
@@ -26,8 +32,10 @@ int main(void)
 	AFIO->MAPR&=~AFIO_MAPR_TIM2_REMAP;
 
 
-	/*Enable clock access to timer2*/
+	/*Enable clock access to timer2 and 3*/
 	RCC->APB1ENR|=RCC_APB1ENR_TIM2EN;
+
+    RCC->APB1ENR|=RCC_APB1ENR_TIM3EN;
 
 	/*Configure timer2*/
 	TIM2->PSC=18;                         // DIVIDE 8MHz by 57 == 140000
@@ -36,26 +44,43 @@ int main(void)
 	TIM2->CCER|=TIM_CCER_CC1E;
 	TIM2->CR1|=TIM_CR1_CEN;
 
+
+    /*Configure timer3*/
+
+    TIM3->CR2|=TIM_CR2_MMS_1;
+
+    TIM3->PSC=8000-1;
+	TIM3->ARR=1000-1;
+
+    TIM3->CR1|=TIM_CR1_CEN;
+
     
-    
+    	/*Power up the adc*/
+	ADC1->CR2|=ADC_CR2_ADON;
+
+
+	/*Launch the ADC*/
+	ADC1->CR2|=ADC_CR2_ADON;
+
 
 
 	while(1)
 	{
-		// for (volatile int i=0;i<100;i++)
-		// 	{
-		// 		TIM2->CCR1=i;
-		// 		for (int j=0;j<10000;j++);
-		// 	}
-
-		// for (volatile int i=100;i>0;i--)
-		// 	{
-		// 		TIM2->CCR1=i;
-		// 		for (int j=0;j<1000;j++);
-		// 	}
-        
+		
 
             TIM2->CCR1=3;
+
+            
+		/*Relaunch the ADC*/
+		ADC1->CR2|=ADC_CR2_ADON;
+		/*Launch the ADC conversion*/
+		ADC1->CR2|=ADC_CR2_SWSTART;
+
+		/*wait for EOC*/
+
+		while(!(ADC1->SR &ADC_SR_EOC));
+
+		adc_data=ADC1->DR;
 
 
 	}
