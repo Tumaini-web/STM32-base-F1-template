@@ -1,8 +1,10 @@
 #include "stm32f1xx.h"
 
+uint16_t i=0;
+
 // Quick and dirty delay
 static void delay (unsigned int time) {
-    for (unsigned int i = 0; i < time; i++)
+    for ( i = 0; i < time; i++)
         for (volatile unsigned int j = 0; j < 2000; j++);
 }
 
@@ -10,7 +12,7 @@ int main (void) {
     // Turn on the GPIOC and B peripheral
     RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
 
-    RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;
+    SET_BIT(RCC->APB2ENR, RCC_APB2ENR_IOPBEN);
 
     // Put pin 13 in general purpose push-pull mode
     GPIOC->CRH &= ~(GPIO_CRH_CNF13);

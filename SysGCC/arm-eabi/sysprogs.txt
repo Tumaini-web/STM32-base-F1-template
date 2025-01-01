@@ -1,4 +1,0 @@
-This toolchain is based on the official ARM toolchain (https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-mingw-w64-i686-arm-none-eabi.zip) with the following changes:
-
-* GDB has been replaced with a newer v15.1 built from scratch. This addresses issues with slow loading of large symbol files.
-* regex.h has been patched per https://github.com/devkitPro/newlib/commit/5ff5c8ac6682bb2d59006e477f6dd9521a6d1bf6 to avoid build errors.
