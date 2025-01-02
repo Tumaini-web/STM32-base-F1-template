@@ -1,45 +1,25 @@
 #include "stm32f1xx.h"
+#include "encoder.h"
+//#include "uart.h"
 
-uint16_t i=0;
 
-// Quick and dirty delay
-static void delay (unsigned int time) {
-    for ( i = 0; i < time; i++)
-        for (volatile unsigned int j = 0; j < 2000; j++);
-}
 
-int main (void) {
-    // Turn on the GPIOC and B peripheral
-    RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
+uint16_t encoder_read_previous;
 
-    SET_BIT(RCC->APB2ENR, RCC_APB2ENR_IOPBEN);
+int main(void)
+{
+	//uart2_init();
+	encoder_init(400);
+	//printf("hello from stm32\r\n");
+	while(1)
+	{
 
-    // Put pin 13 in general purpose push-pull mode
-    GPIOC->CRH &= ~(GPIO_CRH_CNF13);
-    // Set the output mode to max. 2MHz
-    GPIOC->CRH |= GPIO_CRH_MODE13_1;
+		if(encoder_read()!=encoder_read_previous)
+		{
+			encoder_read_previous=encoder_read()/4;
+			//printf("Encoder counts = %d\r\n",encoder_read());
 
-    // Put pin 12 in general purpose push-pull mode
-    GPIOB->CRH &= ~(GPIO_CRH_CNF12);
-    // Set the output mode to max. 2MHz
-    GPIOB->CRH |= GPIO_CRH_MODE12_1;
+		}
 
-    while (1) {
-        // Reset the state of pin 13 to output low
-        GPIOC->BSRR = GPIO_BSRR_BR13;
-
-        GPIOB->BSRR = GPIO_BSRR_BR12;
-
-        delay(200);
-
-        // Set the state of pin 13 to output high
-        GPIOC->BSRR = GPIO_BSRR_BS13;
-
-        GPIOB->BSRR = GPIO_BSRR_BS12;
-
-        delay(200);
-    }
-
-    // Return 0 to satisfy compiler
-    return 0;
+	}
 }
