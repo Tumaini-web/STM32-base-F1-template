@@ -1,94 +1,91 @@
-// #include "stm32f3xx.h"
-
-// // Quick and dirty delay
-// static void delay (unsigned int time) {
-//     for (unsigned int i = 0; i < time; i++)
-//         for (volatile unsigned int j = 0; j < 2000; j++);
-// }
-
-
 #include "stm32f3xx.h"
 
-volatile uint32_t last_capture = 0;
-volatile uint32_t frequency = 0;
-volatile uint32_t capture;
+uint32_t charge_time = 0;
+uint32_t discharge_time = 0;
 
-void init_gpio(void) {
+void init_gpio_pa1_pa5(void) {
     // Enable GPIOA clock
     RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
 
-    // PA1 as analog for COMP1 input
-    GPIOA->MODER |= (3 << (1 * 2));  // Analog mode
+    // PA1: Analog input (capacitor voltage)
+    GPIOA->MODER |= GPIO_MODER_MODER1;
+
+    // PA5: Output push-pull (charge control)
+    GPIOA->MODER |= GPIO_MODER_MODER5_0;
+    GPIOA->OTYPER &= ~GPIO_OTYPER_OT_5;
+    GPIOA->PUPDR &= ~GPIO_PUPDR_PUPDR5;
 }
 
-void init_comp1(void) {
-    // Enable SYSCFG clock (for comparator)
+void init_dac1_for_comp_ref(uint16_t val12bit) {
+    RCC->APB1ENR |= RCC_APB1ENR_DAC1EN;
+
+    // Disable DAC before configuration
+    DAC1->CR &= ~DAC_CR_EN1;
+
+    // Optional: disable trigger (default), enable buffer (optional)
+    DAC1->CR &= ~DAC_CR_TEN1;         // Disable trigger
+    DAC1->CR &= ~DAC_CR_BOFF1;        // Enable output buffer (good for most loads)
+
+    // Set DAC value BEFORE enabling
+    DAC1->DHR12R1 = val12bit;         // 12-bit right-aligned value (0–4095)
+
+    // Enable DAC
+    DAC1->CR |= DAC_CR_EN1;
+}
+
+
+void init_comp1_for_dac_ref(void) {
     RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
 
-    // Enable comparator
-    COMP1->CSR |= COMP1_CSR_COMP1EN; // Enable COMP1, default INP is PA1, INM is VREFINT
-    // Output is high when INP > INM (default 1.22V)
+    // Disable COMP1
+    COMP1->CSR &= ~COMP1_CSR_COMP1EN;
 
+    // Use PA1 as non-inverting input (default)
+   // COMP1->CSR &= ~COMP1_CSR_COMP1INSEL;
 
-    // default INP is PA1, INM is VREFINT
-    COMP1->CSR |= COMP1_CSR_COMP1INSEL_0;
-    COMP1->CSR |= COMP1_CSR_COMP1INSEL_1;
-    COMP1->CSR &= ~(COMP1_CSR_COMP1INSEL_2);
-    
+    // Use DAC1_CH1 output as inverting input
+    COMP1->CSR &= ~COMP1_CSR_COMP1INSEL;
+    COMP1->CSR |= COMP1_CSR_COMP1INSEL_2;
 
-    // TIM2 CH4 input capture mapped to COMP1 output (internal routing)
-    COMP1->CSR |= COMP1_CSR_COMP1OUTSEL_3;
-    COMP1->CSR &= ~(COMP1_CSR_COMP1OUTSEL_2);
-    COMP1->CSR &= ~(COMP1_CSR_COMP1OUTSEL_1);
-    COMP1->CSR &= ~(COMP1_CSR_COMP1OUTSEL_0);
+    // Enable COMP1
+    COMP1->CSR |= COMP1_CSR_COMP1EN;
 }
 
-void init_timer2_input_capture(void) {
-    // Enable TIM2 clock
+void init_tim2_us(void) {
     RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-
-    
-
-    // Route COMP1 output to TIM2 CH4
-    TIM2->PSC = 7999;         // Prescaler for 1 KHz timer clock (8 MHz sysclk)
-    TIM2->ARR = 10000;     // Max ARR
-
-    TIM2 -> SMCR |= TIM_SMCR_SMS_1;
-    TIM2 -> SMCR |= TIM_SMCR_SMS_2;
-    TIM2 -> SMCR &= ~(TIM_SMCR_SMS_0);
-    TIM2 -> SMCR &= ~(TIM_SMCR_SMS_3);
-
-    TIM2->CCMR2 |= TIM_CCMR2_CC4S_0; // CC4S = 01: CC4 channel is input, IC4 is mapped to TI4
-    TIM2->CCMR2 &= ~(TIM_CCMR2_CC4S_1); // CC4S = 01: CC4 channel is input, IC4 is mapped to TI4
-
-    TIM2->CCER |= TIM_DIER_UIE;
-    TIM2->CCER |= TIM_CCER_CC4E;  // Enable capture
-    TIM2->DIER |= TIM_DIER_CC4IE; // Enable interrupt on capture
-    TIM2->CR1 |= TIM_CR1_CEN;     // Enable timer
-
-    NVIC_EnableIRQ(TIM2_IRQn);
+    TIM2->PSC = 8 - 1;         // 8 MHz / 8 = 1 MHz -> 1 µs ticks
+    TIM2->ARR = 0xFFFFFFFF;
+    TIM2->CR1 |= TIM_CR1_CEN;
 }
 
-void TIM2_IRQHandler(void) {
-    if (TIM2->SR & TIM_SR_CC4IF) {
-        capture = TIM2->CCR4;
-        uint32_t diff = (capture - last_capture) & 10000;
-        last_capture = capture;
-
-        // Frequency = timer_clock / period_ticks
-        frequency = 1000000 / diff;  // Since timer clock = 1 MHz
-
-        TIM2->SR &= ~TIM_SR_CC4IF;
-    }
+uint32_t time_until_comp_state(uint8_t target_state) {
+    uint32_t t_start = TIM2->CNT;
+    while (((COMP1->CSR & COMP1_CSR_COMP1OUT) ? 1 : 0) != target_state);
+    uint32_t t_end = TIM2->CNT;
+    return (t_end >= t_start) ? (t_end - t_start) : (0xFFFFFFFF - t_start + t_end + 1);
 }
 
 int main(void) {
-    init_gpio();
-    init_comp1();
-    init_timer2_input_capture();
+    init_gpio_pa1_pa5();
+    init_dac1_for_comp_ref(2483); // 2483/4095 * 3.3V ≈ 2.0V
+    init_comp1_for_dac_ref();
+    init_tim2_us();
+
+    // uint32_t charge_time = 0;
+    // uint32_t discharge_time = 0;
 
     while (1) {
-        // frequency variable gets updated in interrupt
-        // use it as needed
+        // === CHARGE ===
+        init_dac1_for_comp_ref(2483); // 2483/4095 * 3.3V ≈ 2.0V
+        GPIOA->ODR |= GPIO_ODR_5; // Set PA5 high
+        charge_time = time_until_comp_state(1); // Wait until Vcap > 2V
+
+        // === DISCHARGE ===
+        init_dac1_for_comp_ref(1241); // 1V threshold
+        GPIOA->ODR &= ~GPIO_ODR_5; // Set PA5 low
+        discharge_time = time_until_comp_state(0); // Wait until Vcap < 2V
+
+        // Now you have charge_time and discharge_time in µs
+        // You could log, toggle an LED, etc.
     }
 }
