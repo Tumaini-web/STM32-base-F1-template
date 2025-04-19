@@ -24,7 +24,7 @@ void init_dac1_for_comp_ref(uint16_t val12bit) {
 
     // Optional: disable trigger (default), enable buffer (optional)
     DAC1->CR &= ~DAC_CR_TEN1;         // Disable trigger
-    DAC1->CR &= ~DAC_CR_BOFF1;        // Enable output buffer (good for most loads)
+    DAC1->CR &= ~DAC_CR_BOFF1;        // Enable output buffer 
 
     // Set DAC value BEFORE enabling
     DAC1->DHR12R1 = val12bit;         // 12-bit right-aligned value (0–4095)
@@ -75,17 +75,16 @@ int main(void) {
     // uint32_t discharge_time = 0;
 
     while (1) {
-        // === CHARGE ===
-        init_dac1_for_comp_ref(2483); // 2483/4095 * 3.3V ≈ 2.0V
+        // CHARGE
+        init_dac1_for_comp_ref(2568); // 2483/4095 * 3.3V ≈ 2.0V
         GPIOA->ODR |= GPIO_ODR_5; // Set PA5 high
         charge_time = time_until_comp_state(1); // Wait until Vcap > 2V
 
-        // === DISCHARGE ===
-        init_dac1_for_comp_ref(1241); // 1V threshold
+        // DISCHARGE 
+        init_dac1_for_comp_ref(100); // 1V 
         GPIOA->ODR &= ~GPIO_ODR_5; // Set PA5 low
         discharge_time = time_until_comp_state(0); // Wait until Vcap < 2V
 
-        // Now you have charge_time and discharge_time in µs
-        // You could log, toggle an LED, etc.
-    }
+        
+}
 }
